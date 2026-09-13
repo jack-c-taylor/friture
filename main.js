@@ -2,7 +2,7 @@ const config = {
   type: Phaser.CANVAS,
   parent: "friture-game",
   width: 1000,
-  height: 750,
+  height: 950,
   backgroundColor: "#FFFFFF",
   scene: {
     preload: preload,
@@ -11,7 +11,14 @@ const config = {
   },
 };
 
-let phaserGame, scene, tool, line, toolOffset;
+const menuHeight = 200;
+
+let photoCanvas, photoLink;
+let phaserGame, scene;
+let tool, line;
+let baseLineColor = 0xff0000;
+let toolOffset = 0;
+let frameOffset = 0;
 let layers = [];
 let images = [];
 let menuOptions = [];
@@ -29,16 +36,25 @@ function preload() {
     "blank",
     "camera",
     "brush",
-    "frame",
+    "frame0",
+    "frame1",
     "frameToggle",
     "fire0",
     "fire1",
     "fire2",
-    "lines",
+    "leaf0",
+    "leaf1",
+    "leaf2",
+    "tool_fire",
+    "tool_leaf",
+    "tool_lines",
     "upload",
   ].forEach((name) => {
     this.load.image(name, `./images/${name}.png`);
   });
+
+  photoCanvas = document.getElementById("photo-output");
+  photoLink = document.getElementById("photo-link");
 }
 
 /* Generate initial game display on load. */
@@ -46,8 +62,20 @@ function create() {
   scene = this;
 
   createLayer("background").single = true;
+  scene.drawingLayer = createLayer("drawing");
   scene.frameLayer = createLayer("frame");
-  createLayer("ux").add(this.add.rectangle(500, 700, 1000, 100, 0xeeffff));
+  createLayer("ux").add(
+    this.add.rectangle(500, 850, 1000, menuHeight, 0xeeffff),
+  );
+
+  scene.drawingCanvas = scene.add.renderTexture(
+    config.width / 2,
+    config.height / 2,
+    config.width,
+    config.height,
+  );
+  scene.drawingCanvas.saveTexture("drawing");
+  scene.drawingLayer.add(scene.drawingCanvas);
 
   // Display default content.
   loadInitialScene();
@@ -55,34 +83,57 @@ function create() {
   // Display UX.
   createButton(
     "reset",
-    { x: 10, y: 670, width: 60, height: 60 },
-    loadInitialScene
+    { x: 10, y: 770, width: 60, height: 60 },
+    loadInitialScene,
   );
 
-  ["lines", "fire0"].forEach((tool, index) => {
-    createTool(tool, { x: 150 + index * 120, y: 675, width: 50, height: 50 });
+  ["lines", "fire", "leaf"].forEach((tool, index) => {
+    createTool(tool, { x: 150 + index * 120, y: 775, width: 50, height: 50 });
+  });
+
+  let selection = scene.add
+    .graphics()
+    .fillStyle(baseLineColor * 0.8, 1)
+    .fillRoundedRect(156, 856, 48, 48, 15);
+
+  [baseLineColor, 0x00ff00, 0x00ffff, 0xff00ff].forEach((color, i) => {
+    scene.add
+      .graphics()
+      .fillStyle(color, 1)
+      .fillRoundedRect(160 + i * 50, 860, 40, 40, 12);
+    createButton(
+      "blank",
+      { x: 156 + i * 50, y: 856, width: 40, height: 40 },
+      () => {
+        baseLineColor = color;
+        selection.x = 150 + i * 50;
+        selection
+          .clear()
+          .fillStyle(color * 0.8, 1)
+          .fillRoundedRect(6, 856, 48, 48, 15);
+      },
+    );
   });
 
   // Add frame toggle.
-  createImage("frame", { layer: "frame" });
-  scene.frameLayer.alpha = 0;
-
-  createButton(
-    "frameToggle",
-    { x: 390, y: 675, width: 50, height: 50 },
-    () => (scene.frameLayer.alpha = 1 - scene.frameLayer.alpha)
-  );
+  createButton("frameToggle", { x: 510, y: 775, width: 50, height: 50 }, () => {
+    scene.frameLayer.removeAll();
+    if (frameOffset < 2) {
+      createImage("frame" + frameOffset, { layer: "frame" });
+    }
+    frameOffset = (frameOffset + 1) % 3;
+  });
 
   createButton(
     "camera",
-    { x: 930, y: 665, width: 60, height: 60 },
-    takePicture
+    { x: 930, y: 765, width: 60, height: 60 },
+    takePicture,
   );
 
   // Allow image upload.
   const imageUpload = document.getElementById("imageInput");
-  createButton("upload", { x: 850, y: 665, width: 60, height: 60 }, () =>
-    imageUpload.click()
+  createButton("upload", { x: 850, y: 765, width: 60, height: 60 }, () =>
+    imageUpload.click(),
   );
 
   let img = new Image();
@@ -91,9 +142,10 @@ function create() {
       .createCanvas("localFile", img.width, img.height)
       .draw(0, 0, img);
 
+    const scale = Math.min(1, (config.height - menuHeight) / img.height);
     createImage("localFile", {
-      x: (config.width - img.width) / 2,
-      y: (config.height - img.height) / 2,
+      width: config.width * scale,
+      height: (config.height - menuHeight) * scale,
       layer: "background",
     });
   };
@@ -105,7 +157,7 @@ function create() {
     const [image] = imageUpload.files;
     if (image) {
       let reader = new FileReader();
-      reader.onload = function (e) {
+      reader.onload = function (_e) {
         img.src = reader.result;
       };
       reader.readAsDataURL(image);
@@ -119,45 +171,67 @@ function create() {
 
 /* Follow mouse with drawings. */
 function update() {
+  const xDiff = scene.cursor.x - this.input.activePointer.worldX;
+  const yDiff = scene.cursor.y - this.input.activePointer.worldY;
+  const thickness = Math.sqrt((xDiff ^ 2) + (yDiff ^ 2)).toRange(1.5, 12) / 1.5;
   scene.cursor.x = this.input.activePointer.worldX;
   scene.cursor.y = this.input.activePointer.worldY;
 
-  scene.cursor.alpha = scene.cursor.y < 650 ? 1 : 0;
+  scene.cursor.alpha = scene.cursor.y < config.height - menuHeight ? 1 : 0;
 
-  if (this.input.activePointer.isDown && scene.cursor.y < 650) {
-    if (tool == "fire0") {
-      if (toolOffset % 7 == 0) {
-        images.push(
-          createImage("fire" + (toolOffset % 3), {
-            x: scene.cursor.x - 20,
-            y: scene.cursor.y - 35,
-          })
-        );
+  if (
+    this.input.activePointer.isDown &&
+    scene.cursor.y < config.height - menuHeight
+  ) {
+    toolOffset++;
+    if ((tool == "fire" || tool == "leaf") && toolOffset % 2) {
+      let name = tool + (toolOffset % 3);
+      let element = null;
+      if (tool == "leaf") {
+        element = scene.add.image(0, 0, name);
+        element.angle = toolOffset * 3;
       }
-      toolOffset %= 21;
+
+      scene.drawingCanvas.draw(
+        element ?? name,
+        scene.cursor.x - 20,
+        scene.cursor.y - 35,
+      );
+      element?.destroy();
+
+      toolOffset %= 72;
     } else if (tool == "lines") {
       if (line == null) {
         line = this.add.graphics();
         line.beginPath();
-        images.push(line);
+        scene.drawingLayer.add(line);
       }
-      line.lineStyle(8, 0xff0000 + 0x000200 * (toolOffset % (0xff / 2)), 1);
+
+      line.lineStyle(
+        thickness,
+        baseLineColor + 0x000200 * (toolOffset % (0xff / 2)),
+        1,
+      );
       line.lineTo(scene.cursor.x, scene.cursor.y);
       line.moveTo(scene.cursor.x, scene.cursor.y);
       line.closePath();
       line.strokePath();
     }
-    toolOffset++;
   } else {
-    line?.save();
-    line = null;
-    toolOffset = 0;
+    if (line) {
+      scene.drawingCanvas.draw(line, 0, 0);
+      line.destroy();
+      line = null;
+    }
   }
 }
 
 /* Display first available background, clearing previous content. */
 function loadInitialScene() {
   createImage("blank", { layer: "background" });
+
+  scene.drawingCanvas.clear();
+
   // Clear layered images.
   layers.forEach((layer) => {
     if (layer.temporary) {
@@ -180,14 +254,13 @@ function takePicture() {
   ux.alpha = 0;
 
   // Attempt to take a screenshot.
+  let image = new Image();
+  image.src = phaserGame.canvas.toDataURL();
   setTimeout(() => {
     try {
-      let button = document.createElement("a");
-      button.href = phaserGame.canvas.toDataURL();
-      button.download = "friture";
-      document.body.appendChild(button);
-      button.click();
-      document.body.removeChild(button);
+      photoCanvas.getContext("2d").drawImage(image, 0, 0);
+      photoLink.href = photoCanvas.toDataURL();
+      photoLink.click();
 
       ux.alpha = 1;
     } catch {
@@ -269,14 +342,13 @@ function createButton(name, options = {}, action) {
  *
  * @param {string} name
  * @param {Object} options
- * @param {Function} action
  * @returns {Image} The created image with attached interactive logic.
  */
-function createTool(name, options = {}, action) {
+function createTool(name, options = {}) {
   options.pointerOver = () => (toolItem.alpha = 1);
   options.pointerOut = () => (toolItem.alpha = toolOffset == name ? 0.5 : 1);
 
-  let toolItem = createButton(name, options, () => setTool(name));
+  let toolItem = createButton("tool_" + name, options, () => setTool(name));
   toolItem.name = name;
   menuOptions.push(toolItem);
 
@@ -294,3 +366,7 @@ function setTool(toolName) {
     menuOption.alpha = tool == menuOption.name ? 1 : 0.5;
   });
 }
+
+Number.prototype.toRange = function (min, max) {
+  return Math.max(min, Math.min(max, this));
+};
