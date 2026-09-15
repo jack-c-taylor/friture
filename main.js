@@ -18,7 +18,7 @@ let phaserGame, scene;
 let tool, line;
 let baseLineColor = 0xff0000;
 let toolOffset = 0;
-let frameOffset = 0;
+let frameOffset;
 let layers = [];
 let images = [];
 let menuOptions = [];
@@ -91,19 +91,31 @@ function create() {
     createTool(tool, { x: 150 + index * 120, y: 775, width: 50, height: 50 });
   });
 
+  scene.palette = scene.add.container();
+
   let selection = scene.add
     .graphics()
     .fillStyle(baseLineColor * 0.8, 1)
     .fillRoundedRect(156, 856, 48, 48, 15);
+  scene.palette.add(selection);
 
   [baseLineColor, 0x00ff00, 0x00ffff, 0xff00ff].forEach((color, i) => {
-    scene.add
-      .graphics()
-      .fillStyle(color, 1)
-      .fillRoundedRect(160 + i * 50, 860, 40, 40, 12);
+    scene.palette.add(
+      scene.add
+        .graphics()
+        .fillStyle(color, 1)
+        .fillRoundedRect(160 + i * 50, 860, 40, 40, 12),
+    );
     createButton(
       "blank",
-      { x: 156 + i * 50, y: 856, width: 40, height: 40 },
+      {
+        x: 156 + i * 50,
+        y: 856,
+        width: 40,
+        height: 40,
+        pointerOver: () => {},
+        pointerOut: () => {},
+      },
       () => {
         baseLineColor = color;
         selection.x = 150 + i * 50;
@@ -112,7 +124,7 @@ function create() {
           .fillStyle(color * 0.8, 1)
           .fillRoundedRect(6, 856, 48, 48, 15);
       },
-    );
+    ).alpha = 0.1;
   });
 
   // Add frame toggle.
@@ -152,7 +164,7 @@ function create() {
 
   imageUpload.addEventListener("change", async () => {
     createImage("blank", { layer: "background" });
-    scene.textures.remove("localFile");
+    if (scene.textures.exists("localFile")) scene.textures.remove("localFile");
 
     const [image] = imageUpload.files;
     if (image) {
@@ -231,6 +243,8 @@ function loadInitialScene() {
   createImage("blank", { layer: "background" });
 
   scene.drawingCanvas.clear();
+  scene.frameLayer.removeAll();
+  frameOffset = 0;
 
   // Clear layered images.
   layers.forEach((layer) => {
@@ -346,7 +360,7 @@ function createButton(name, options = {}, action) {
  */
 function createTool(name, options = {}) {
   options.pointerOver = () => (toolItem.alpha = 1);
-  options.pointerOut = () => (toolItem.alpha = toolOffset == name ? 0.5 : 1);
+  options.pointerOut = () => (toolItem.alpha = toolItem.name == tool ? 1 : 0.5);
 
   let toolItem = createButton("tool_" + name, options, () => setTool(name));
   toolItem.name = name;
@@ -365,6 +379,8 @@ function setTool(toolName) {
   menuOptions.forEach((menuOption) => {
     menuOption.alpha = tool == menuOption.name ? 1 : 0.5;
   });
+
+  scene.palette.alpha = tool == "lines" ? 1 : 0;
 }
 
 Number.prototype.toRange = function (min, max) {

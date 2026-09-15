@@ -4,6 +4,11 @@
     <script src="//cdn.jsdelivr.net/npm/phaser@3.88.2/dist/phaser.min.js"></script>
     <script src="./main.js"></script>
     <style>
+      body {
+        background-color: cadetblue;
+        display: flex;
+      }
+
       #game-container {
         display: flex;
         flex-direction: column;
@@ -11,7 +16,8 @@
         width: 1000px;
       }
 
-      #photo-output, #photo-link {
+      #photo-output,
+      #photo-link {
         display: none;
         width: 1000px;
         height: 750px;
@@ -28,6 +34,16 @@
       #imageInput {
         display: none;
       }
+
+      #tooltip {
+        background-color: white;
+        margin-left: 20px;
+        padding: 20px;
+        height: fit-content;
+        font-family: sans-serif;
+        float: right;
+        border-radius: 8px;
+      }
     </style>
   </head>
   <body>
@@ -36,6 +52,13 @@
     <canvas id="photo-output" width="1000" height="750"></canvas>
     <div id="game-container">
       <div id="friture-game"></div>
+    </div>
+    <div id="tooltip">
+      <p>Line tool - four colour ranges, move slowly for detailed work.</p>
+      <p>Fire tool - alternating pattern.</p>
+      <p>Leaf tool - alternating pattern and rotation.</p>
+      <p>Frame tool - including two custom frames!</p>
+      <p>Upload tool - resizes uploaded image to fit canvas.</p>
     </div>
   </body>
 </html>
